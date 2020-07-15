@@ -1,0 +1,11 @@
+[package]
+name = "ogg-coverart"
+version = "0.1.0"
+authors = ["Allen Wild <allenwild93@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0.31"
+base64 = "0.12.3"
+clap = "2.33.1"
+png = "0.16.6"
