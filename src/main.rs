@@ -15,6 +15,9 @@
 //!
 //! TODO: implement this in ffmpeg itself
 //! TODO: add jpeg support with https://crates.io/crates/jpeg-decoder
+//!
+//! Copyright 2020 Allen Wild <allenwild93@gmail.com>
+//! SPDX-License-Identifier: Apache-2.0
 
 use std::fs::{self, File};
 use std::io::prelude::*;
