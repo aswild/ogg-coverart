@@ -49,10 +49,11 @@ struct PicInfo {
 
 fn pic_info(data: &[u8]) -> Result<PicInfo> {
     let decoder = png::Decoder::new(Cursor::new(data));
-    let (info, _) = decoder.read_info()?;
+    let reader = decoder.read_info()?;
+    let info = reader.info();
 
     // these restrictions might not be necessary
-    if info.color_type != png::ColorType::RGB {
+    if info.color_type != png::ColorType::Rgb {
         return Err(anyhow!("PNG isn't RGB"));
     }
     if info.bit_depth != png::BitDepth::Eight {
@@ -88,22 +89,22 @@ fn main() -> Result<()> {
         .version(crate_version!())
         .about("Generate FLAC/OGG METADATA_BLOCK_PICTURE tag data from an image")
         .arg(
-            Arg::with_name("format")
-                .short("f")
+            Arg::new("format")
+                .short('f')
                 .long("format")
                 .takes_value(true)
                 .possible_values(&["bin", "b64", "ff"])
                 .help("output format: binary, base64 encoded, or ffmetadata.ini"),
         )
         .arg(
-            Arg::with_name("output")
-                .short("o")
+            Arg::new("output")
+                .short('o')
                 .long("output")
                 .takes_value(true)
                 .help("output file, omit or use - for stdout"),
         )
         .arg(
-            Arg::with_name("input")
+            Arg::new("input")
                 .required(true)
                 .help("Input image file"),
         )
