@@ -80,7 +80,7 @@ fn generate_pic_data(data: &[u8]) -> Result<Vec<u8>> {
     out.write_u32b(info.depth)?;
     out.write_u32b(0)?; // index color count, not used for png/jpg
     out.write_u32b(data.len() as u32)?;
-    out.write_all(&data)?;
+    out.write_all(data)?;
     Ok(out)
 }
 
