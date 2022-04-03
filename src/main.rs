@@ -25,7 +25,7 @@ use std::io::{self, Cursor};
 
 use anyhow::{anyhow, Result};
 use base64::display::Base64Display;
-use clap::{crate_version, App, Arg};
+use clap::{crate_version, Command, Arg};
 
 /// Give writers a method to write big-endian u32 values
 trait WriteU32 {
@@ -85,7 +85,7 @@ fn generate_pic_data(data: &[u8]) -> Result<Vec<u8>> {
 }
 
 fn main() -> Result<()> {
-    let args = App::new("ogg-coverart")
+    let args = Command::new("ogg-coverart")
         .version(crate_version!())
         .about("Generate FLAC/OGG METADATA_BLOCK_PICTURE tag data from an image")
         .arg(

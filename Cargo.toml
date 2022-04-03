@@ -6,7 +6,7 @@ license = "Apache-2.0"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.52"
-base64 = "0.13.0"
-clap = { version = "3.0.5", features = ["cargo"] }
-png = "0.17.2"
+anyhow = "1"
+base64 = "0.13"
+clap = { version = "3", features = ["cargo"] }
+png = "0.17"
