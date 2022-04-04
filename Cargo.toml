@@ -9,4 +9,5 @@ edition = "2021"
 anyhow = "1"
 base64 = "0.13"
 clap = { version = "3", features = ["cargo"] }
+jpeg-decoder = { version = "0.2", default-features = false }
 png = "0.17"

@@ -19,8 +19,9 @@
 
 use std::fs::{self, File};
 use std::io::{self, BufWriter, Cursor, Write};
+use std::path::Path;
 
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use clap::{crate_version, AppSettings, Arg, ArgGroup, Command};
 
 /// Give writers a method to write big-endian u32 values
@@ -33,6 +34,19 @@ impl<W: Write> WriteU32 for W {
         let data = n.to_be_bytes();
         self.write_all(&data)
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ImageType {
+    Png,
+    Jpeg,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OutputFormat {
+    Binary,
+    Base64,
+    FFMetadata,
 }
 
 /// Represents an image file and its extracted metadata needed to generate a METADATA_BLOCK_PICTURE
@@ -55,7 +69,7 @@ impl<'a> MetadataBlockPicture<'a> {
         use png::{BitDepth, ColorType, Decoder};
 
         let decoder = Decoder::new(Cursor::new(data));
-        let reader = decoder.read_info()?;
+        let reader = decoder.read_info().context("PNG image parse")?;
         let info = reader.info();
 
         // note: this ignores indexed color PNGs and treats them the same as a grayscale image in
@@ -89,6 +103,38 @@ impl<'a> MetadataBlockPicture<'a> {
         })
     }
 
+    /// Parse the info needed for picture metadata from the data of a jpeg image file.
+    fn from_jpeg(data: &'a [u8]) -> Result<Self> {
+        use jpeg_decoder::{Decoder, PixelFormat};
+
+        let mut decoder = Decoder::new(Cursor::new(data));
+        decoder.read_info().context("JPG image parse")?;
+        let info = decoder.info().unwrap();
+
+        let bit_depth = match info.pixel_format {
+            PixelFormat::L8 => 8,
+            PixelFormat::L16 => 16,
+            PixelFormat::RGB24 => 24,
+            PixelFormat::CMYK32 => 32,
+        };
+
+        Ok(Self {
+            mime: "image/jpeg",
+            width: info.width.into(),
+            height: info.height.into(),
+            bit_depth,
+            data,
+        })
+    }
+
+    /// Parse the info needed for picture metadata using one of the supported types.
+    fn from_type(data: &'a [u8], image_type: ImageType) -> Result<Self> {
+        match image_type {
+            ImageType::Png => Self::from_png(data),
+            ImageType::Jpeg => Self::from_jpeg(data),
+        }
+    }
+
     /// Write the METADATA_BLOCK_PICTURE header and data to the given writer
     fn write_to<W: Write>(&self, w: &mut W) -> io::Result<()> {
         w.write_u32b(3)?; // type: cover(front)
@@ -110,24 +156,25 @@ impl<'a> MetadataBlockPicture<'a> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum OutputFormat {
-    Binary,
-    Base64,
-    FFMetadata,
-}
-
 fn run() -> Result<()> {
     let args = Command::new("ogg-coverart")
         .version(crate_version!())
         .about("Generate FLAC/OGG METADATA_BLOCK_PICTURE tag data from an image")
+        .override_usage("ogg-coverart [OPTIONS] {-f | -b | -B} [-o OUTPUT] INPUT")
         .setting(AppSettings::DeriveDisplayOrder)
-        .arg(Arg::new("input").required(true).help("Input image file"))
+        .arg(
+            Arg::new("input")
+                .required(true)
+                .allow_invalid_utf8(true)
+                .value_name("INPUT")
+                .help("Input image file"),
+        )
         .arg(
             Arg::new("output")
                 .short('o')
                 .long("output")
                 .takes_value(true)
+                .value_name("OUTPUT")
                 .help("Output file, omit or use - for stdout"),
         )
         .arg(
@@ -154,7 +201,41 @@ fn run() -> Result<()> {
                 .multiple(false)
                 .required(true),
         )
+        .arg(
+            Arg::new("force_png")
+                .short('p')
+                .long("png")
+                .help("treat the input as a PNG image (overrides file extension autodetection)"),
+        )
+        .arg(
+            Arg::new("force_jpeg")
+                .short('j')
+                .long("jpeg")
+                .help("treat the input as a JPEG image (overrides file extension autodetection)"),
+        )
+        .group(
+            ArgGroup::new("input_format")
+                .args(&["force_png", "force_jpeg"])
+                .multiple(false)
+                .required(false),
+        )
         .get_matches();
+
+    let input_path = Path::new(args.value_of_os("input").unwrap());
+    let input_type = if args.is_present("force_png") {
+        ImageType::Png
+    } else if args.is_present("force_jpeg") {
+        ImageType::Jpeg
+    } else {
+        match input_path.extension().and_then(std::ffi::OsStr::to_str) {
+            Some("png") => ImageType::Png,
+            Some("jpg" | "jpeg") => ImageType::Jpeg,
+            _ => bail!(
+                "can't determine image type (missing or unrecognized file extension)\n\
+                 Use the --png or --jpeg flag to manually set the image format"
+            ),
+        }
+    };
 
     let out_fmt = if args.is_present("fmt_bin") {
         OutputFormat::Binary
@@ -166,12 +247,15 @@ fn run() -> Result<()> {
         unreachable!()
     };
 
-    let data = fs::read(&args.value_of("input").unwrap())?;
-    let meta = MetadataBlockPicture::from_png(&data)?;
+    let data = fs::read(input_path).context("failed reading input file")?;
+    let meta =
+        MetadataBlockPicture::from_type(&data, input_type).context("failed to parse input file")?;
 
     let mut out: Box<dyn Write> = match args.value_of("output") {
         None | Some("-") => Box::new(io::stdout()),
-        Some(path) => Box::new(BufWriter::new(File::create(path)?)),
+        Some(path) => Box::new(BufWriter::new(
+            File::create(path).context("failed to create output file")?,
+        )),
     };
 
     match out_fmt {
@@ -184,6 +268,8 @@ fn run() -> Result<()> {
             let mut b64_out = base64::write::EncoderWriter::new(&mut out, base64::STANDARD);
             meta.write_to(&mut b64_out)?;
             b64_out.finish()?;
+            drop(b64_out);
+            out.write_all(b"\n")?;
         }
     }
 
