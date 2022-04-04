@@ -14,7 +14,7 @@
 //! https://wiki.xiph.org/VorbisComment#METADATA_BLOCK_PICTURE
 //! https://xiph.org/flac/format.html#metadata_block_picture
 //!
-//! Copyright 2020 Allen Wild <allenwild93@gmail.com>
+//! Copyright 2020-2022 Allen Wild <allenwild93@gmail.com>
 //! SPDX-License-Identifier: Apache-2.0
 
 use std::fs::{self, File};
