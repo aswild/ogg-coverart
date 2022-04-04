@@ -22,7 +22,7 @@ use std::io::{self, BufWriter, Cursor, Write};
 use std::path::Path;
 
 use anyhow::{bail, Context, Result};
-use clap::{crate_version, AppSettings, Arg, ArgGroup, Command};
+use clap::{crate_version, AppSettings, Arg, ArgGroup, ArgMatches, Command};
 
 /// Give writers a method to write big-endian u32 values
 trait WriteU32 {
@@ -156,8 +156,8 @@ impl<'a> MetadataBlockPicture<'a> {
     }
 }
 
-fn run() -> Result<()> {
-    let args = Command::new("ogg-coverart")
+fn parse_args() -> ArgMatches {
+    Command::new("ogg-coverart")
         .version(crate_version!())
         .about("Generate FLAC/OGG METADATA_BLOCK_PICTURE tag data from an image")
         .override_usage("ogg-coverart [OPTIONS] {-f | -b | -B} [-o OUTPUT] INPUT")
@@ -219,7 +219,11 @@ fn run() -> Result<()> {
                 .multiple(false)
                 .required(false),
         )
-        .get_matches();
+        .get_matches()
+}
+
+fn run() -> Result<()> {
+    let args = parse_args();
 
     let input_path = Path::new(args.value_of_os("input").unwrap());
     let input_type = if args.is_present("force_png") {
